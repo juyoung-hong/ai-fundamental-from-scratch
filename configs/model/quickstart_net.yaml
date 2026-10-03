@@ -1,0 +1,4 @@
+name: "quickstart_net"
+input_dim: 784
+hidden_dim: 512
+output_dim: 10

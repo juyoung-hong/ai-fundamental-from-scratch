@@ -1,0 +1,5 @@
+name: "default_trainer"
+batch_size: 64
+epochs: 5
+seed: 42
+device: "auto" # cpu, cuda, auto

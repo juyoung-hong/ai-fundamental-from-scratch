@@ -1,0 +1,14 @@
+defaults:
+  - data: fashion_mnist
+  - trainer: default
+  - model: quickstart_net
+  - optimizer: sgd     
+  - persistence: local_file
+
+# override default values
+trainer:
+  batch_size: 128              # default(64) -> 128로 오버라이드
+  epochs: 3                    # default(5) -> 3으로 오버라이드
+  
+optimizer:
+  lr: 0.005                    # default(0.001) -> 0.005로 오버라이드

@@ -1,0 +1,4 @@
+name: "local_file"
+output_dir: "./outputs"
+save_top_k: 3
+checkpoint_interval: 1          # epoch 단위

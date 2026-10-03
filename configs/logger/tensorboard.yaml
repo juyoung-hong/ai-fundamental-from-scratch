@@ -1,0 +1,4 @@
+name: "tensorboard"
+type: "tensorboard"             # tensorboard, wandb, mlflow 등
+log_dir: "./runs"
+flush_secs: 120

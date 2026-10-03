@@ -1,0 +1,2 @@
+name: "fashion_mnist"
+data_dir: "./data"

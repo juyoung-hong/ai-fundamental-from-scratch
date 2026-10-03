@@ -1,0 +1,12 @@
+# 프로젝트 기본 베이스라인(Baseline) 구성 파일
+defaults:
+  - data: fashion_mnist
+  - trainer: default
+  - model: quickstart_net
+  - optimizer: sgd
+  - logger: tensorboard
+  - persistence: local_file
+
+project_name: "ai-fundamental-from-scratch"
+task_name: "fashion_mnist_quickstart-net_classification"
+version: "1.0.0"

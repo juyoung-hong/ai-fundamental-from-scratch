@@ -1,0 +1,21 @@
+[project]
+name = "ai-fundamental-from-scratch"
+version = "0.1.0"
+description = "Studying and implementing AI & ML principles."
+readme = "README.md"
+authors = [
+    { name = "Juyoung Hong", email = "hjy_stat@naver.com" }
+]
+requires-python = ">=3.12.10,<3.13"
+dependencies = [
+    "omegaconf>=2.3.1",
+    "torch>=2.14.1",
+    "torchvision>=0.29.1",
+]
+
+[project.scripts]
+ai-fundamental-from-scratch = "ai_fundamental_from_scratch:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
