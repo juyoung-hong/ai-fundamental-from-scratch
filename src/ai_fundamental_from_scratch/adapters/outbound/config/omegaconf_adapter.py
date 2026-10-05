@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from omegaconf import OmegaConf, errors
+from omegaconf import DictConfig, OmegaConf, errors
 
 from ai_fundamental_from_scratch.domain.config import (
     AppConfig,
@@ -22,39 +22,64 @@ class OmegaConfAdapter(ConfigRepositoryPort):
 
     def load_config(self, overrides: Optional[List[str]] = None) -> AppConfig:
         cli_cfg = OmegaConf.from_cli(overrides or [])
-        exp_name = cli_cfg.get("experiment", None)
+        exp_name = cli_cfg.pop("experiment", None)  # 메타 키 제거 및 추출
 
-        # 1. Base default map 로드 (main.yaml)
+        # 1. Defaults 맵 구성 (main.yaml + experiment)
+        base_cfg, exp_cfg, defaults_map = self._resolve_defaults(exp_name, cli_cfg)
+
+        # 2. Sub-config 로드 및 출처 정보 표기
+        merged_modules = self._load_sub_configs(defaults_map)
+
+        # 3. Base/Exp 스칼라 및 CLI 오버라이드 검증 병합
+        final_cfg = self._merge_and_validate(base_cfg, exp_cfg, merged_modules, cli_cfg)
+
+        # 4. 실행 디렉토리 생성 및 Final YAML 저장
+        log_run_dir, out_run_dir = self._save_resolved_config(final_cfg)
+
+        # 5. Domain Dataclass 매핑 및 반환
+        return self._to_domain_config(final_cfg, log_run_dir, out_run_dir)
+
+    # ------------------------------------------------------------------
+    # Private Helper Methods (단일 책임 분리)
+    # ------------------------------------------------------------------
+
+    def _resolve_defaults(
+        self, exp_name: Optional[str], cli_cfg: DictConfig
+    ) -> Tuple[DictConfig, DictConfig, Dict[str, str]]:
         main_path = os.path.join(self.config_dir, "main.yaml")
         if not os.path.exists(main_path):
             raise FileNotFoundError(f"Main config file not found: {main_path}")
 
         base_cfg = OmegaConf.load(main_path)
+        defaults_map: Dict[str, str] = {}
 
-        defaults_map = {}
-        if "defaults" in base_cfg:
-            for item in base_cfg["defaults"]:
-                for key, val in item.items():
-                    defaults_map[key] = val
+        for item in base_cfg.get("defaults", []):
+            defaults_map.update(item)
 
-        # 2. Experiment 파일 존재 여부 검증
         exp_cfg = OmegaConf.create()
         if exp_name:
             exp_path = os.path.join(self.config_dir, "experiment", f"{exp_name}.yaml")
             if not os.path.exists(exp_path):
                 raise FileNotFoundError(
-                    f"\n[ConfigError] Specified experiment file '{exp_name}.yaml' does not exist in '{os.path.join(self.config_dir, 'experiment')}'."
-                    f"\nPlease check the filename syntax or directory contents."
+                    f"\n[ConfigError] Specified experiment file '{exp_name}.yaml' does not exist in '{os.path.dirname(exp_path)}'."
                 )
-
             exp_cfg = OmegaConf.load(exp_path)
-            if "defaults" in exp_cfg:
-                for item in exp_cfg["defaults"]:
-                    for key, val in item.items():
-                        defaults_map[key] = val
+            for item in exp_cfg.get("defaults", []):
+                defaults_map.update(item)
 
-        # 3. Sub-config 파일 로드
+        # [핵심 추가] CLI에서 들어온 모듈 그룹 오버라이드(e.g., data=animals_10)를 defaults_map에 반영
+        for group_key in list(defaults_map.keys()):
+            if group_key in cli_cfg and isinstance(cli_cfg[group_key], str):
+                defaults_map[group_key] = cli_cfg.pop(
+                    group_key
+                )  # defaults 맵을 바꾸고 cli_cfg에서는 제거
+
+        return base_cfg, exp_cfg, defaults_map
+
+    def _load_sub_configs(self, defaults_map: Dict[str, str]) -> DictConfig:
+        """defaults 맵에 명시된 서브 모듈 파일들을 로드하고 출처 트래킹 정보 삽입"""
         merged_modules = OmegaConf.create()
+
         for key, filename in defaults_map.items():
             sub_path = os.path.join(self.config_dir, key, f"{filename}.yaml")
             if not os.path.exists(sub_path):
@@ -64,22 +89,26 @@ class OmegaConfAdapter(ConfigRepositoryPort):
             sub_cfg["_config_source"] = f"configs/{key}/{filename}.yaml"
             merged_modules[key] = sub_cfg
 
+        return merged_modules
+
+    def _merge_and_validate(
+        self,
+        base_cfg: DictConfig,
+        exp_cfg: DictConfig,
+        merged_modules: DictConfig,
+        cli_cfg: DictConfig,
+    ) -> DictConfig:
+        """설정 병합 및 struct 모드를 통한 무효 키 오버라이드 차단 검증"""
         base_scalars = {k: v for k, v in base_cfg.items() if k != "defaults"}
         exp_scalars = {k: v for k, v in exp_cfg.items() if k != "defaults"}
 
-        # 4. 베이스 구성 병합
         base_merged_cfg = OmegaConf.merge(merged_modules, base_scalars, exp_scalars)
 
-        # [핵심 1] struct 플래그 활성화 (존재하지 않는 키 오버라이드 금지)
+        # 존재하지 않는 키 오버라이드 금지
         OmegaConf.set_struct(base_merged_cfg, True)
 
-        # [핵심 2] CLI 인자 중 메타 키인 'experiment'는 하이퍼파라미터 병합 대상에서 제외
-        if "experiment" in cli_cfg:
-            del cli_cfg["experiment"]
-
-        # 5. CLI 오버라이드 병합 검증
         try:
-            final_cfg = OmegaConf.merge(base_merged_cfg, cli_cfg)
+            return OmegaConf.merge(base_merged_cfg, cli_cfg)
         except (
             errors.ConfigAttributeError,
             errors.ConfigKeyError,
@@ -91,7 +120,8 @@ class OmegaConfAdapter(ConfigRepositoryPort):
                 f"\nDetails: {e}"
             ) from e
 
-        # 6. 타임스탬프 기반 디렉토리 생성 및 저장
+    def _save_resolved_config(self, final_cfg: DictConfig) -> Tuple[str, str]:
+        """타임스탬프 실행 폴더 생성 및 최종 확정된 config.yaml 파일 보관"""
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         log_run_dir = os.path.join(final_cfg.logger.log_dir, timestamp)
         out_run_dir = os.path.join(final_cfg.persistence.output_dir, timestamp)
@@ -103,11 +133,22 @@ class OmegaConfAdapter(ConfigRepositoryPort):
         with open(save_path, "w", encoding="utf-8") as f:
             f.write(OmegaConf.to_yaml(final_cfg))
 
-        # 7. Domain Dataclass로 인스턴스화
+        return log_run_dir, out_run_dir
+
+    def _to_domain_config(
+        self, final_cfg: DictConfig, log_run_dir: str, out_run_dir: str
+    ) -> AppConfig:
+        """OmegaConf 객체를 pure Python Domain Dataclasses로 매핑"""
         return AppConfig(
             data=DataConfig(
                 name=final_cfg.data.name,
                 data_dir=final_cfg.data.data_dir,
+                modality=final_cfg.data.get("modality", "image"),
+                image_shape=(
+                    list(final_cfg.data.image_shape)
+                    if getattr(final_cfg.data, "image_shape", None)
+                    else None
+                ),
                 source_file=final_cfg.data.get("_config_source", ""),
             ),
             trainer=TrainerConfig(

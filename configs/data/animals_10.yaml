@@ -1,0 +1,5 @@
+name: "animals_10"
+data_dir: "./data/Animals-10/raw-img"
+modality: "image"
+image_shape: [28, 28, 3]  # [Height, Width, Channels]
+num_classes: 10

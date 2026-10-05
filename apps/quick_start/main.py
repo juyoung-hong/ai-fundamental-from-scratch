@@ -42,6 +42,8 @@ def main():
     train_loader, test_loader = data_adapter.get_data_loaders(cfg.data, cfg.trainer)
 
     # 3. Model
+    if hasattr(cfg.data, "input_dim") and cfg.data.input_dim:
+        cfg.model.input_dim = cfg.data.input_dim
     model = ModelAdapterFactory.create_model(cfg.model)
 
     # 4. Composite Loss & Optimizer

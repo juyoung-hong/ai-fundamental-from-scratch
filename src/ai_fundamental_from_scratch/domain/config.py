@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -12,9 +12,30 @@ class SubConfigBase:
         return data
 
 
+# src/ai_fundamental_from_scratch/domain/config.py
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
+
+from ai_fundamental_from_scratch.domain.config import SubConfigBase
+
+
 @dataclass
 class DataConfig(SubConfigBase):
+    name: str
     data_dir: str = "./data"
+    modality: str = "image"
+    image_shape: Optional[List[int]] = (
+        None  # [H, W, C] 예: [28, 28, 3] 또는 [28, 28, 1]
+    )
+    source_file: str = ""
+
+    @property
+    def input_dim(self) -> int:
+        """[H, W, C] 형태에서 Flatten 입력 차원을 자동 계산"""
+        if self.image_shape and len(self.image_shape) == 3:
+            h, w, c = self.image_shape
+            return h * w * c
+        return 784  # fallback default
 
 
 @dataclass

@@ -1,2 +1,5 @@
 name: "fashion_mnist"
 data_dir: "./data"
+modality: "image"
+image_shape: [28, 28, 1]  # [Height, Width, Channels]
+num_classes: 10

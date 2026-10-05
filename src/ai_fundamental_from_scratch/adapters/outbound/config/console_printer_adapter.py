@@ -1,33 +1,50 @@
+from rich.console import Console
+from rich.panel import Panel
+from rich.tree import Tree
+
 from ai_fundamental_from_scratch.domain.config import AppConfig
-from ai_fundamental_from_scratch.ports.outbound.config_port import (
-    ConfigPrinterPort,
-)
+from ai_fundamental_from_scratch.ports.outbound.config_port import ConfigPrinterPort
 
 
 class ConsoleConfigPrinterAdapter(ConfigPrinterPort):
+    def __init__(self):
+        self.console = Console()
+
     def print_config(
         self, config: AppConfig, title: str = "Config Verification"
     ) -> None:
-        print("\n" + "=" * 70)
-        print(f"  {title}")
-        print("=" * 70)
+        self._print_rich(config, title)
+
+    def _print_rich(self, config: AppConfig, title: str) -> None:
+        """rich 라이브러리를 사용한 컬러풀한 Panel & Tree 출력"""
+        root_tree = Tree(f"[bold cyan]{title}[/bold cyan]")
 
         for category, sub_cfg in config.get_sub_configs().items():
             source = sub_cfg.source_file or "Default / Custom"
 
-            # 1. Category 및 Name 헤더 출력
-            print(f"[{category}] {sub_cfg.name}")
+            # 카테고리 노드 생성
+            cat_node = root_tree.add(
+                f"[bold yellow][{category.upper()}][/bold yellow] [bold white]{sub_cfg.name}[/bold white]"
+            )
+            cat_node.add(f"[dim]Source File:[/dim] [green]{source}[/green]")
 
-            # 2. Source File 정보 한 줄 아래 출력
-            print(f"  ├─ Source File : {source}")
-
-            # 3. 세부 하이퍼파라미터 목록을 한 줄씩 들여쓰기하여 출력
+            # 세부 파라미터 노드
             details = sub_cfg.get_details()
             if details:
-                print("  └─ Parameters  :")
+                param_node = cat_node.add("[dim]Parameters:[/dim]")
                 for param_key, param_val in details.items():
-                    print(f"        • {param_key}: {param_val}")
+                    param_node.add(
+                        f"[bold magenta]{param_key}[/bold magenta]: [bright_blue]{param_val}[/bright_blue]"
+                    )
 
-            print("-" * 70)
-
-        print("=" * 70 + "\n")
+        # 아름다운 Panel 감싸기
+        panel = Panel(
+            root_tree,
+            title="[bold green]Hexagonal Traceability Report[/bold green]",
+            subtitle="[dim]Resolved Configuration Snapshot[/dim]",
+            border_style="bright_blue",
+            padding=(1, 2),
+        )
+        self.console.print("\n")
+        self.console.print(panel)
+        self.console.print("\n")
