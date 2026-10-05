@@ -9,37 +9,63 @@ from ai_fundamental_from_scratch.adapters.outbound.config.omegaconf_adapter impo
 from ai_fundamental_from_scratch.adapters.outbound.data.data_factory import (
     DataAdapterFactory,
 )
+from ai_fundamental_from_scratch.adapters.outbound.loss.composite_loss_adapter import (
+    CompositeLoss,
+)
+from ai_fundamental_from_scratch.adapters.outbound.model.model_factory import (
+    ModelAdapterFactory,
+)
+from ai_fundamental_from_scratch.adapters.outbound.optimizer.pytorch_optimizer_adapter import (
+    PyTorchOptimizerAdapter,
+)
+from ai_fundamental_from_scratch.services.trainer_service import TrainerService
 
 
 def main():
     cli_args = sys.argv[1:]
 
-    # 1. Config Loader Adapter
+    # 1. Config Loader & Traceability Printer (설정 및 시각 스냅샷 생성)
     config_adapter = OmegaConfAdapter(config_dir="./configs")
     cfg = config_adapter.load_config(overrides=cli_args)
 
-    # 2. Config Printer Adapter
     printer = ConsoleConfigPrinterAdapter()
-    printer.print_config(cfg, title="Experiment Traceability Report")
+    printer.print_config(cfg, title="Hexagonal Experiment Traceability Report")
 
-    # 3. Dynamic Data Adapter Factory
-    # main.py는 데이터셋이 Torchvision인지, CSV인지, 로컬 이미지 폴더인지 알 필요가 없습니다.
-    print(f"[{cfg.data.name}] 데이터 로더 초기화 중...")
+    # 2. Dynamic Data Loader Adapter 생성
+    print(f"[{cfg.data.name}] Data Loader 초기화 중...")
     data_adapter = DataAdapterFactory.create_adapter(cfg.data.name)
     train_loader, test_loader = data_adapter.get_data_loaders(cfg.data, cfg.trainer)
 
-    print(
-        f"✓ [{cfg.data.name}] Train DataLoader 준비 완료: {len(train_loader)} batches (Batch Size: {cfg.trainer.batch_size})"
-    )
-    print(f"✓ [{cfg.data.name}] Test DataLoader 준비 완료 : {len(test_loader)} batches")
+    # 3. Dynamic Model Adapter 생성
+    print(f"[{cfg.model.name}] PyTorch 신경망 모델 생성 중...")
+    model = ModelAdapterFactory.create_model(cfg.model)
 
-    # 4. 데이터 샘플 검증 (학습 루프 진입 전 차원 및 배치 검증)
-    for X, y in train_loader:
-        print("\n--- 데이터 배치 Sample Verification ---")
-        print(f"Dataset Name          : {cfg.data.name}")
-        print(f"Shape of X [N, C, H, W]: {X.shape} (Dtype: {X.dtype})")
-        print(f"Shape of y            : {y.shape} (Dtype: {y.dtype})")
-        break
+    # 4. Composite Loss & Optimizer Adapter 생성
+    # 기본 단일 CE Loss 또는 복합 Weighted Loss 구성
+    loss_components = getattr(cfg, "loss", None)
+    if loss_components and hasattr(loss_components, "components"):
+        composite_loss = CompositeLoss(loss_components.components)
+    else:
+        # 별도 loss config가 없으면 CrossEntropy 기본 구성 적용
+        from ai_fundamental_from_scratch.domain.config import LossComponentConfig
+
+        composite_loss = CompositeLoss(
+            [LossComponentConfig(name="ce_loss", type="cross_entropy", weight=1.0)]
+        )
+
+    opt_adapter = PyTorchOptimizerAdapter()
+    _, optimizer = opt_adapter.create_loss_and_optimizer(model, cfg.optimizer)
+
+    # 5. Core Trainer Service Engine 주입
+    trainer = TrainerService(
+        model=model,
+        composite_loss=composite_loss,
+        optimizer=optimizer,
+        trainer_config=cfg.trainer,
+    )
+
+    # 6. Training & Evaluation Fit Loop 실행
+    trainer.fit(train_loader, test_loader)
 
 
 if __name__ == "__main__":

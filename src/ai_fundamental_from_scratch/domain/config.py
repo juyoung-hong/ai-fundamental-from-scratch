@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -18,11 +18,25 @@ class DataConfig(SubConfigBase):
 
 
 @dataclass
+class LossComponentConfig:
+    name: str
+    type: str
+    weight: float = 1.0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LossConfig(SubConfigBase):
+    components: List[LossComponentConfig] = field(default_factory=list)
+
+
+@dataclass
 class TrainerConfig(SubConfigBase):
     batch_size: int = 64
     epochs: int = 5
     seed: int = 42
     device: str = "auto"
+    metrics: List[str] = field(default_factory=lambda: ["accuracy"])
 
 
 @dataclass

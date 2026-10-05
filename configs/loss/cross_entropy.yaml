@@ -1,0 +1,4 @@
+components:
+  - name: "ce"
+    type: "cross_entropy"
+    weight: 1.0
