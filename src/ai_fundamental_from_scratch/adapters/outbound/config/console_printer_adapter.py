@@ -16,23 +16,25 @@ class ConsoleConfigPrinterAdapter(ConfigPrinterPort):
         self._print_rich(config, title)
 
     def _print_rich(self, config: AppConfig, title: str) -> None:
-        """rich 라이브러리를 사용한 컬러풀한 Panel & Tree 출력"""
         root_tree = Tree(f"[bold cyan]{title}[/bold cyan]")
 
         for category, sub_cfg in config.get_sub_configs().items():
-            source = sub_cfg.source_file or "Default / Custom"
+            source = getattr(sub_cfg, "source_file", None) or "Default / Custom"
 
-            # 카테고리 노드 생성
             cat_node = root_tree.add(
                 f"[bold yellow][{category.upper()}][/bold yellow] [bold white]{sub_cfg.name}[/bold white]"
             )
             cat_node.add(f"[dim]Source File:[/dim] [green]{source}[/green]")
 
-            # 세부 파라미터 노드
-            details = sub_cfg.get_details()
-            if details:
+            filtered_details = {
+                k: v
+                for k, v in sub_cfg.get_details().items()
+                if k not in ("name", "source_file")
+            }
+
+            if filtered_details:
                 param_node = cat_node.add("[dim]Parameters:[/dim]")
-                for param_key, param_val in details.items():
+                for param_key, param_val in filtered_details.items():
                     param_node.add(
                         f"[bold magenta]{param_key}[/bold magenta]: [bright_blue]{param_val}[/bright_blue]"
                     )

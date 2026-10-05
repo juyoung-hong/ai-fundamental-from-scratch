@@ -24,6 +24,7 @@ from ai_fundamental_from_scratch.adapters.outbound.optimizer.pytorch_optimizer_a
 from ai_fundamental_from_scratch.adapters.outbound.persistence.local_file_adapter import (
     LocalFilePersistenceAdapter,
 )
+from ai_fundamental_from_scratch.domain.config import LossComponentConfig
 from ai_fundamental_from_scratch.services.trainer_service import TrainerService
 
 
@@ -48,14 +49,7 @@ def main():
 
     # 4. Composite Loss & Optimizer
     loss_components = getattr(cfg, "loss", None)
-    if loss_components and hasattr(loss_components, "components"):
-        composite_loss = CompositeLoss(loss_components.components)
-    else:
-        from ai_fundamental_from_scratch.domain.config import LossComponentConfig
-
-        composite_loss = CompositeLoss(
-            [LossComponentConfig(name="ce_loss", type="cross_entropy", weight=1.0)]
-        )
+    composite_loss = CompositeLoss(loss_components.components)
 
     opt_adapter = PyTorchOptimizerAdapter()
     _, optimizer = opt_adapter.create_loss_and_optimizer(model, cfg.optimizer)

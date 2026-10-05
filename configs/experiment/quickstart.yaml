@@ -1,8 +1,10 @@
 defaults:
-  - data: fashion_mnist
   - trainer: default
+  - data: fashion_mnist
   - model: quickstart_net
-  - optimizer: sgd     
+  - loss: cross_entropy_with_l1_regualrization
+  - optimizer: sgd
+  - logger: tensorboard
   - persistence: local_file
 
 # override default values

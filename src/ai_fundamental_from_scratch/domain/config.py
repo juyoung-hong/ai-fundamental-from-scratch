@@ -50,6 +50,29 @@ class LossComponentConfig:
 class LossConfig(SubConfigBase):
     components: List[LossComponentConfig] = field(default_factory=list)
 
+    def get_details(self) -> Dict[str, Any]:
+        # 1. dataclass를 dict로 변환 (self.components 내부 원소들도 모두 dict가 됨)
+        data = asdict(self)
+        comp_list: List[Dict[str, Any]] = data.get("components", [])
+
+        details: Dict[str, Any] = {}
+
+        if comp_list:
+            # 2. formula 수식 생성 (dict 접근)
+            formula_terms = [
+                f"{c['weight']} * {c['name']}" if c["weight"] != 1.0 else f"{c['name']}"
+                for c in comp_list
+            ]
+            details["formula"] = " + ".join(formula_terms)
+
+            # 3. 개별 component 항목 생성 (dict 접근)
+            for i, c in enumerate(comp_list, 1):
+                details[f"component_{i}"] = (
+                    f"{c['name']} (type={c['type']}, weight={c['weight']})"
+                )
+
+        return details
+
 
 @dataclass
 class TrainerConfig(SubConfigBase):
@@ -96,6 +119,7 @@ class AppConfig:
     data: DataConfig
     trainer: TrainerConfig
     model: ModelConfig
+    loss: LossConfig
     optimizer: OptimizerConfig
     logger: LoggerConfig
     persistence: PersistenceConfig
@@ -103,9 +127,10 @@ class AppConfig:
     def get_sub_configs(self) -> Dict[str, SubConfigBase]:
         """모든 서브 컨피그들을 딕셔너리로 순회 가능하도록 반환"""
         return {
+            "Trainer": self.trainer,
             "Data": self.data,
             "Model": self.model,
-            "Trainer": self.trainer,
+            "Loss": self.loss,
             "Optimizer": self.optimizer,
             "Logger": self.logger,
             "Persistence": self.persistence,

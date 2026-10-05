@@ -11,7 +11,7 @@ class ModelAdapterFactory:
     @staticmethod
     def create_model(model_config: ModelConfig) -> nn.Module:
         name = model_config.name.lower().replace("-", "_")
-        if name in ("quickstart_net", "quickstart"):
+        if name == "quickstart_net":
             adapter: ModelPort = QuickstartModelAdapter()
             return adapter.create_model(model_config)
 

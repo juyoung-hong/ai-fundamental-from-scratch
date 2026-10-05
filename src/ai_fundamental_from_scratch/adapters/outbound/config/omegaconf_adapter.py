@@ -8,6 +8,8 @@ from ai_fundamental_from_scratch.domain.config import (
     AppConfig,
     DataConfig,
     LoggerConfig,
+    LossComponentConfig,
+    LossConfig,
     ModelConfig,
     OptimizerConfig,
     PersistenceConfig,
@@ -139,6 +141,20 @@ class OmegaConfAdapter(ConfigRepositoryPort):
         self, final_cfg: DictConfig, log_run_dir: str, out_run_dir: str
     ) -> AppConfig:
         """OmegaConf 객체를 pure Python Domain Dataclasses로 매핑"""
+        loss_components = []
+        if getattr(final_cfg, "loss", None) and getattr(
+            final_cfg.loss, "components", None
+        ):
+            for comp in final_cfg.loss.components:
+                loss_components.append(
+                    LossComponentConfig(
+                        name=comp.get("name", comp.get("type", "ce")),
+                        type=comp.get("type", "ce"),
+                        weight=float(comp.get("weight", 1.0)),
+                        params=dict(comp.get("params", {})),
+                    )
+                )
+
         return AppConfig(
             data=DataConfig(
                 name=final_cfg.data.name,
@@ -165,6 +181,11 @@ class OmegaConfAdapter(ConfigRepositoryPort):
                 hidden_dim=final_cfg.model.hidden_dim,
                 output_dim=final_cfg.model.output_dim,
                 source_file=final_cfg.model.get("_config_source", ""),
+            ),
+            loss=LossConfig(
+                name=getattr(final_cfg.loss, "name", "composite_loss"),
+                components=loss_components,
+                source_file=getattr(final_cfg.loss, "_config_source", ""),
             ),
             optimizer=OptimizerConfig(
                 name=final_cfg.optimizer.name,

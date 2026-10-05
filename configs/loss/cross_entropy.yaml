@@ -1,4 +1,4 @@
 components:
-  - name: "ce"
-    type: "cross_entropy"
+  - name: "cross_entropy_loss"
+    type: "ce"
     weight: 1.0

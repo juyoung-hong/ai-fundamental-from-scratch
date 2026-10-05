@@ -49,6 +49,7 @@ class TrainerService:
             self.model.eval()
 
         total_loss = 0.0
+        running_component_losses = {}
         metric_sums: Dict[str, float] = {m: 0.0 for m in self.metrics_list}
         total_samples = 0
 
@@ -56,7 +57,7 @@ class TrainerService:
             for X, y in dataloader:
                 X, y = X.to(self.device), y.to(self.device)
                 pred = self.model(X)
-                loss, _ = self.loss_fn(pred, y)
+                loss, loss_details = self.loss_fn(pred, y)
 
                 if is_train:
                     self.optimizer.zero_grad()
@@ -67,13 +68,22 @@ class TrainerService:
                 total_loss += loss.item() * batch_size
                 total_samples += batch_size
 
+                for comp_name, comp_val in loss_details.items():
+                    running_component_losses[comp_name] = (
+                        running_component_losses.get(comp_name, 0.0)
+                        + comp_val * batch_size
+                    )
+
                 batch_metrics = self.metric_evaluator.compute_all(pred, y)
                 for k, v in batch_metrics.items():
                     metric_sums[k] = metric_sums.get(k, 0.0) + v
 
         avg_loss = total_loss / total_samples
+        avg_component_losses = {
+            f"loss/{k}": v / total_samples for k, v in running_component_losses.items()
+        }
         avg_metrics = {k: v / total_samples for k, v in metric_sums.items()}
-        return avg_loss, avg_metrics
+        return avg_loss, avg_component_losses, avg_metrics
 
     def fit(
         self, train_loader: DataLoader, test_loader: DataLoader
@@ -85,8 +95,12 @@ class TrainerService:
         print("=" * 70)
 
         for epoch in range(1, self.config.epochs + 1):
-            train_loss, train_metrics = self._run_epoch(train_loader, is_train=True)
-            test_loss, test_metrics = self._run_epoch(test_loader, is_train=False)
+            train_loss, train_component_losses, train_metrics = self._run_epoch(
+                train_loader, is_train=True
+            )
+            test_loss, test_component_losses, test_metrics = self._run_epoch(
+                test_loader, is_train=False
+            )
 
             metrics_record = EpochMetrics(
                 epoch=epoch,
@@ -99,8 +113,12 @@ class TrainerService:
 
             # 1. Logger 연동 (TensorBoard)
             if self.logger:
-                self.logger.log_scalar("Loss/train", train_loss, epoch)
-                self.logger.log_scalar("Loss/test", test_loss, epoch)
+                for tag, val in train_component_losses.items():
+                    self.logger.log_scalar(f"Train/{tag}", val, step=epoch)
+                self.logger.log_scalar("Train/loss/total_loss", train_loss, epoch)
+                for tag, val in test_component_losses.items():
+                    self.logger.log_scalar(f"Test/{tag}", val, step=epoch)
+                self.logger.log_scalar("Test/loss/total_loss", test_loss, epoch)
                 self.logger.log_metrics(train_metrics, step=epoch, prefix="Train")
                 self.logger.log_metrics(test_metrics, step=epoch, prefix="Test")
 

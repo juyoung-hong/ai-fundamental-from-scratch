@@ -1,8 +1,9 @@
 # 프로젝트 기본 베이스라인(Baseline) 구성 파일
 defaults:
-  - data: fashion_mnist
   - trainer: default
+  - data: fashion_mnist
   - model: quickstart_net
+  - loss: cross_entropy
   - optimizer: sgd
   - logger: tensorboard
   - persistence: local_file
