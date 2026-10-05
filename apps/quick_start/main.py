@@ -9,6 +9,9 @@ from ai_fundamental_from_scratch.adapters.outbound.config.omegaconf_adapter impo
 from ai_fundamental_from_scratch.adapters.outbound.data.data_factory import (
     DataAdapterFactory,
 )
+from ai_fundamental_from_scratch.adapters.outbound.logger.logger_factory import (
+    LoggerFactory,
+)
 from ai_fundamental_from_scratch.adapters.outbound.loss.composite_loss_adapter import (
     CompositeLoss,
 )
@@ -18,35 +21,34 @@ from ai_fundamental_from_scratch.adapters.outbound.model.model_factory import (
 from ai_fundamental_from_scratch.adapters.outbound.optimizer.pytorch_optimizer_adapter import (
     PyTorchOptimizerAdapter,
 )
+from ai_fundamental_from_scratch.adapters.outbound.persistence.local_file_adapter import (
+    LocalFilePersistenceAdapter,
+)
 from ai_fundamental_from_scratch.services.trainer_service import TrainerService
 
 
 def main():
     cli_args = sys.argv[1:]
 
-    # 1. Config Loader & Traceability Printer (설정 및 시각 스냅샷 생성)
+    # 1. Config Loader & Printer
     config_adapter = OmegaConfAdapter(config_dir="./configs")
     cfg = config_adapter.load_config(overrides=cli_args)
 
     printer = ConsoleConfigPrinterAdapter()
     printer.print_config(cfg, title="Hexagonal Experiment Traceability Report")
 
-    # 2. Dynamic Data Loader Adapter 생성
-    print(f"[{cfg.data.name}] Data Loader 초기화 중...")
+    # 2. Data Loader
     data_adapter = DataAdapterFactory.create_adapter(cfg.data.name)
     train_loader, test_loader = data_adapter.get_data_loaders(cfg.data, cfg.trainer)
 
-    # 3. Dynamic Model Adapter 생성
-    print(f"[{cfg.model.name}] PyTorch 신경망 모델 생성 중...")
+    # 3. Model
     model = ModelAdapterFactory.create_model(cfg.model)
 
-    # 4. Composite Loss & Optimizer Adapter 생성
-    # 기본 단일 CE Loss 또는 복합 Weighted Loss 구성
+    # 4. Composite Loss & Optimizer
     loss_components = getattr(cfg, "loss", None)
     if loss_components and hasattr(loss_components, "components"):
         composite_loss = CompositeLoss(loss_components.components)
     else:
-        # 별도 loss config가 없으면 CrossEntropy 기본 구성 적용
         from ai_fundamental_from_scratch.domain.config import LossComponentConfig
 
         composite_loss = CompositeLoss(
@@ -56,15 +58,20 @@ def main():
     opt_adapter = PyTorchOptimizerAdapter()
     _, optimizer = opt_adapter.create_loss_and_optimizer(model, cfg.optimizer)
 
-    # 5. Core Trainer Service Engine 주입
+    # 5. Logger & Persistence Adapters [신규]
+    logger = LoggerFactory.create_logger(cfg.logger)
+    persistence = LocalFilePersistenceAdapter(cfg.persistence)
+
+    # 6. Core Trainer Engine Execution
     trainer = TrainerService(
         model=model,
         composite_loss=composite_loss,
         optimizer=optimizer,
         trainer_config=cfg.trainer,
+        logger=logger,
+        persistence=persistence,
     )
 
-    # 6. Training & Evaluation Fit Loop 실행
     trainer.fit(train_loader, test_loader)
 
 

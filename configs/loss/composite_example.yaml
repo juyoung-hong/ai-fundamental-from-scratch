@@ -1,0 +1,9 @@
+# configs/loss/composite_example.yaml (복합 손실 예시)
+# 수식: Final Loss = 1.0 * CrossEntropy + 0.01 * L1_Regularization
+components:
+  - name: "ce_loss"
+    type: "cross_entropy"
+    weight: 1.0
+  - name: "l1_reg"
+    type: "l1_regularization"
+    weight: 0.01
