@@ -1,6 +1,6 @@
 name: "default_trainer"
-batch_size: 64
-epochs: 5
+batch_size: 128
+epochs: 30
 seed: 42
 device: "auto" # cpu, cuda, auto
 metrics:
@@ -8,3 +8,16 @@ metrics:
   - "top_k_accuracy"
   - "precision"
   - "recall"
+early_stopping:
+  enabled: true
+  patience: 3
+  min_delta: 0.001
+  monitor: "val_loss"
+  mode: "min"
+lr_scheduler:
+  enabled: true
+  type: "reduce_on_plateau"
+  params:
+    mode: "min"
+    patience: 2
+    factor: 0.5
